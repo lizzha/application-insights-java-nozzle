@@ -1,0 +1,21 @@
+---
+applications:
+- name: ai_nozzle
+  memory: 1G 
+  instances: 1
+  path: target/applicationinsights-nozzle.jar
+  buildpack: https://github.com/cloudfoundry/java-buildpack.git
+  no-route: true
+  health-check-type: none
+  env:
+    CLIENT_ID: CHANGE_ME
+    CLIENT_SECRET: CHANGE_ME
+    API_ADDR: api.<CF_SYSTEM_DOMAIN>
+    SKIP_SSL_VALIDATION: true
+    LOG_LEVEL: DEBUG
+    TELEMETRY_TYPES: "HttpRequest,Metric,AppEvent,Trace"
+    APPLICATION_CONFIG:
+    - APPLICATION_ID: CHANGE_ME
+      INSTRUMENTATION_KEY: CHANGE_ME
+    - APPLICATION_ID: CHANGE_ME
+      INSTRUMENTATION_KEY: CHANGE_ME
