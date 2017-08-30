@@ -125,8 +125,8 @@ public class ApplicationInsightsSender {
      *
      * @param metric
      */
-    public void trackMetric(CustomMetric metric) {
-        log.trace("Track Metric telemetry, name: {}, value: {}", metric.getName(), metric.getValue());
+    public void trackMetric(CustomMetric metric, double value) {
+        log.trace("Track Metric telemetry, name: {}, value: {}", metric.getName(), value);
         String key = metric.getName() + metric.getApplicationId() + metric.getInstanceId();
 
         lock.lock();
@@ -134,7 +134,7 @@ public class ApplicationInsightsSender {
             if (!metricMap.containsKey(key)) {
                 metricMap.put(key, metric);
             }
-            metricMap.get(key).trackValue(metric.getValue());
+            metricMap.get(key).trackValue(value);
         } finally {
             lock.unlock();
         }

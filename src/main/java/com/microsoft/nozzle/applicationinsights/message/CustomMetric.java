@@ -16,9 +16,8 @@ public class CustomMetric extends BaseMessage {
 
     private double sumOfSquares;
 
-    public CustomMetric(String name, double value){
+    public CustomMetric(String name){
         this.name = name;
-        trackValue(value);
     }
 
     public double getAverage() {
