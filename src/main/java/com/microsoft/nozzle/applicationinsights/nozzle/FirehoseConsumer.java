@@ -39,7 +39,7 @@ public class FirehoseConsumer implements SmartLifecycle {
         FirehoseRequest request = FirehoseRequest.builder()
                 .subscriptionId(properties.getSubscriptionId()).build();
 
-        log.info("Accepting telemetry types: {}", properties.getCapturedTelemetries().stream().map(TelemetryType::toString).collect(Collectors.joining(", ")));
+        log.info("Ignoring telemetry types: {}", properties.getIgnoredTelemetries().stream().map(TelemetryType::toString).collect(Collectors.joining(", ")));
         log.info("Collecting telemetries for apps: {}", properties.getApplicationConfigs().stream().map(ApplicationConfig::getApplicationId).collect(Collectors.joining(", ")));
 
         dopplerClient.firehose(request).retry().subscribe(this::receiveEvent, this::receiveError);

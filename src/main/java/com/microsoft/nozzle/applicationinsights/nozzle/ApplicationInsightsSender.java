@@ -3,6 +3,7 @@ package com.microsoft.nozzle.applicationinsights.nozzle;
 import com.microsoft.applicationinsights.TelemetryClient;
 import com.microsoft.applicationinsights.telemetry.*;
 import com.microsoft.nozzle.applicationinsights.message.CustomMetric;
+import com.microsoft.nozzle.applicationinsights.message.EventMessage;
 import com.microsoft.nozzle.applicationinsights.message.RtrMessage;
 import com.microsoft.nozzle.applicationinsights.message.TraceMessage;
 import lombok.extern.slf4j.Slf4j;
@@ -19,15 +20,22 @@ import java.util.concurrent.locks.ReentrantLock;
 public class ApplicationInsightsSender {
 
     private TelemetryClient telemetryClient = new TelemetryClient();
-    private final Map<String, CustomMetric> nametoMetricMap = new HashMap<String, CustomMetric>();
+    // key is Metric name + app id + instance index
+    private final Map<String, CustomMetric> metricMap = new HashMap<String, CustomMetric>();
     private final ReentrantLock lock = new ReentrantLock();
+    private boolean enabled = true;
 
     public ApplicationInsightsSender(String instrumentationKey) {
         telemetryClient.getContext().setInstrumentationKey(instrumentationKey);
         String iKey = telemetryClient.getContext().getInstrumentationKey();
         if (iKey == null) {
             log.error("Error: no instrumentation key set");
+            enabled = false;
         }
+    }
+
+    public boolean isEnabled() {
+        return enabled;
     }
 
     /**
@@ -52,14 +60,15 @@ public class ApplicationInsightsSender {
         telem.getContext().getLocation().setIp(msg.getXForwardedFor());
 
         setTelemetryProperty(telem, "referer", msg.getReferer());
-        setTelemetryProperty(telem, "referer", msg.getReferer());
         setTelemetryProperty(telem, "remote_addr", msg.getRemoteAddr());
         setTelemetryProperty(telem, "dest_ip_port", msg.getDestIpAndPort());
         setTelemetryProperty(telem, "vcap_request_id", msg.getVcapRequestId());
-        setTelemetryProperty(telem, "instance_id", msg.getInstanceId());
+        setTelemetryProperty(telem, "app_index", msg.getAppIndex());
         setTelemetryProperty(telem, "app_name", msg.getApplicationName());
         setTelemetryProperty(telem, "space_name", msg.getSpaceName());
         setTelemetryProperty(telem, "org_name", msg.getOrganizationName());
+        setTelemetryProperty(telem, "app_id", msg.getApplicationId());
+        setTelemetryProperty(telem, "source_instance", msg.getInstanceId());
 
         log.debug("Sending Request telemetry: {}", name);
         telemetryClient.track(telem);
@@ -90,7 +99,7 @@ public class ApplicationInsightsSender {
         SeverityLevel level = SeverityLevel.Information;
         switch (msg.getMessageType()) {
             case ERR:
-                level = SeverityLevel.Warning;
+                level = SeverityLevel.Error;
                 break;
             case OUT:
                 level = SeverityLevel.Information;
@@ -101,10 +110,11 @@ public class ApplicationInsightsSender {
 
         TraceTelemetry telem = new TraceTelemetry(msg.getMessage(), level);
 
-        setTelemetryProperty(telem, "instance_id", msg.getInstanceId());
+        setTelemetryProperty(telem, "source_instance", msg.getInstanceId());
         setTelemetryProperty(telem, "app_name", msg.getApplicationName());
         setTelemetryProperty(telem, "space_name", msg.getSpaceName());
         setTelemetryProperty(telem, "org_name", msg.getOrganizationName());
+        setTelemetryProperty(telem, "app_id", msg.getApplicationId());
 
         log.debug("Sending Trace telemetry: {}", msg.getMessage());
         telemetryClient.track(telem);
@@ -113,21 +123,18 @@ public class ApplicationInsightsSender {
     /**
      * Aggregate the metric data points, to reduce the cost and performance overhead by sending fewer data points to Application Insights
      *
-     * @param name
-     * @param value
+     * @param metric
      */
-    public void trackMetric(String name, double value) {
-        log.trace("Track Metric telemetry, name: {}, value: {}", name, value);
+    public void trackMetric(CustomMetric metric) {
+        log.trace("Track Metric telemetry, name: {}, value: {}", metric.getName(), metric.getValue());
+        String key = metric.getName() + metric.getApplicationId() + metric.getInstanceId();
+
         lock.lock();
         try {
-            CustomMetric metric;
-            if (!nametoMetricMap.containsKey(name)) {
-                metric = new CustomMetric();
-                nametoMetricMap.put(name, metric);
-            } else {
-                metric = nametoMetricMap.get(name);
+            if (!metricMap.containsKey(key)) {
+                metricMap.put(key, metric);
             }
-            metric.trackValue(value);
+            metricMap.get(key).trackValue(metric.getValue());
         } finally {
             lock.unlock();
         }
@@ -137,33 +144,49 @@ public class ApplicationInsightsSender {
      * Send Metric telemetry to Application Insights
      */
     public void sendMetrics() {
+        Map<String, CustomMetric> currentMap = new HashMap<String, CustomMetric>();
         lock.lock();
         try {
-            for (String name : nametoMetricMap.keySet()) {
-                CustomMetric metric = nametoMetricMap.get(name);
-
-                MetricTelemetry telem = new MetricTelemetry(name, metric.getSum());
-                telem.setCount(metric.getCount());
-                telem.setMax(metric.getMax());
-                telem.setMin(metric.getMin());
-                telem.setStandardDeviation(metric.getStandardDeviation());
-
-                telemetryClient.track(telem);
-                log.debug("Sending Metric telemetry: {}", name);
-            }
-            nametoMetricMap.clear();
+            currentMap.putAll(metricMap);
+            metricMap.clear();
         } finally {
             lock.unlock();
+        }
+
+        for (CustomMetric metric : currentMap.values()) {
+            MetricTelemetry telem = new MetricTelemetry(metric.getName(), metric.getSum());
+            telem.setCount(metric.getCount());
+            telem.setMax(metric.getMax());
+            telem.setMin(metric.getMin());
+            telem.setStandardDeviation(metric.getStandardDeviation());
+
+            setTelemetryProperty(telem, "instance_index", metric.getInstanceId());
+            setTelemetryProperty(telem, "app_name", metric.getApplicationName());
+            setTelemetryProperty(telem, "space_name", metric.getSpaceName());
+            setTelemetryProperty(telem, "org_name", metric.getOrganizationName());
+            setTelemetryProperty(telem, "app_id", metric.getApplicationId());
+
+            log.debug("Sending Metric telemetry: {}, app: {}, instance: {}", metric.getName(), metric.getApplicationName(), metric.getInstanceId());
+            telemetryClient.track(telem);
         }
     }
 
     /**
      * Send Event telemetry to Application Insights
      *
-     * @param name
+     * @param msg
      */
-    public void sendEvent(String name) {
-        log.debug("Sending Event telemetry: {}", name);
-        telemetryClient.trackEvent(name);
+    public void sendEvent(EventMessage msg) {
+        log.debug("Sending Event telemetry: {}", msg.getName());
+
+        EventTelemetry telem = new EventTelemetry(msg.getName());
+
+        setTelemetryProperty(telem, "source_instance", msg.getInstanceId());
+        setTelemetryProperty(telem, "app_name", msg.getApplicationName());
+        setTelemetryProperty(telem, "space_name", msg.getSpaceName());
+        setTelemetryProperty(telem, "org_name", msg.getOrganizationName());
+        setTelemetryProperty(telem, "app_id", msg.getApplicationId());
+
+        telemetryClient.track(telem);
     }
 }

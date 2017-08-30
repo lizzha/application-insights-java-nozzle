@@ -15,7 +15,7 @@ public class NozzleProperties {
 
     @PostConstruct
     public void postConstruct() {
-        setCapturedTelemetries();
+        setIgnoredTelemetries();
         setApplicationConfigs();
     }
 
@@ -50,42 +50,42 @@ public class NozzleProperties {
     private boolean skipSslValidation = false;
 
     /**
-     * The telemetry types to send to Application Insights. Comma separated string. Valid types are HttpRequest, Metric, AppEvent, AppLog
+     * The telemetry types NOT to send to Application Insights. Comma separated string. Valid types are HttpRequest, Metric, AppEvent, AppLog
      */
-    private String telemetryTypes;
+    private String telemetryFilter;
 
     /**
      * String of a list of APPLICATION_ID and INSTRUMENTATION_KEY, it's recommended that each application use a separate Application Insights resource
      */
     private String applicationConfig;
 
-    private final List<TelemetryType> capturedTelemetries = new ArrayList<TelemetryType>();
+    private final List<TelemetryType> ignoredTelemetries = new ArrayList<TelemetryType>();
 
     private final List<ApplicationConfig> applicationConfigs = new ArrayList<ApplicationConfig>();
 
     /**
      * Parse the value of telemetryTypes
      */
-    public void setCapturedTelemetries() {
-        capturedTelemetries.clear();
+    public void setIgnoredTelemetries() {
+        ignoredTelemetries.clear();
 
-        if (telemetryTypes == null || telemetryTypes.isEmpty()) {
+        if (telemetryFilter == null || telemetryFilter.isEmpty()) {
             return;
         }
 
-        String lower = telemetryTypes.toLowerCase();
+        String lower = telemetryFilter.toLowerCase();
 
         if (lower.contains("httprequest")) {
-            capturedTelemetries.add(TelemetryType.HTTP_REQUEST);
+            ignoredTelemetries.add(TelemetryType.HTTP_REQUEST);
         }
         if (lower.contains("metric")) {
-            capturedTelemetries.add(TelemetryType.METRIC);
+            ignoredTelemetries.add(TelemetryType.METRIC);
         }
         if (lower.contains("appevent")) {
-            capturedTelemetries.add(TelemetryType.APP_EVENT);
+            ignoredTelemetries.add(TelemetryType.APP_EVENT);
         }
         if (lower.contains("trace")) {
-            capturedTelemetries.add(TelemetryType.TRACE);
+            ignoredTelemetries.add(TelemetryType.TRACE);
         }
     }
 

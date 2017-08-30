@@ -13,7 +13,7 @@ applications:
     API_ADDR: api.<CF_SYSTEM_DOMAIN>
     SKIP_SSL_VALIDATION: true
     LOG_LEVEL: DEBUG
-    TELEMETRY_TYPES: "HttpRequest,Metric,AppEvent,Trace"
+    #TELEMETRY_FILTER: "HttpRequest,Metric,AppEvent,Trace"
     APPLICATION_CONFIG:
     - APPLICATION_ID: CHANGE_ME
       INSTRUMENTATION_KEY: CHANGE_ME

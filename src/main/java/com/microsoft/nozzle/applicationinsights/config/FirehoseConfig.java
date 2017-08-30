@@ -3,6 +3,7 @@ package com.microsoft.nozzle.applicationinsights.config;
 import com.microsoft.nozzle.applicationinsights.cache.AppDataCache;
 import com.microsoft.nozzle.applicationinsights.nozzle.FirehoseConsumer;
 import com.microsoft.nozzle.applicationinsights.nozzle.FirehoseEventRouter;
+import lombok.extern.slf4j.Slf4j;
 import org.cloudfoundry.client.CloudFoundryClient;
 import org.cloudfoundry.doppler.DopplerClient;
 import org.cloudfoundry.reactor.DefaultConnectionContext;
@@ -16,11 +17,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.annotation.Retryable;
 
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Configuration
 @EnableConfigurationProperties(NozzleProperties.class)
+@Slf4j
 public class FirehoseConfig {
     private DefaultConnectionContext connectionContext(String apiHost, Boolean skipSslValidation) {
         return DefaultConnectionContext.builder()
@@ -75,15 +77,15 @@ public class FirehoseConfig {
      * @return
      */
     private String getApiHost(NozzleProperties properties) {
-        String apiHost = properties.getApiAddr();
+        String apiAddr = properties.getApiAddr();
+        Pattern p = Pattern.compile("https://([^\\s]*)");
+        Matcher m = p.matcher(apiAddr);
 
-        // The accepted format of API address shouldn't contain "https://", handle the case if the user input address contains "https://"
-        try {
-            URL url = new URL(apiHost);
-            apiHost = url.getHost();
-        } catch (MalformedURLException e) {
+        while (m.find()) {
+            log.trace("Api address should not contain 'https' prefix, convert to address: {}", m.group(1));
+            return m.group(1);
         }
 
-        return apiHost;
+        return apiAddr;
     }
 }

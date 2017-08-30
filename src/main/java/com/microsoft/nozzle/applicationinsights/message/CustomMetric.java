@@ -1,11 +1,11 @@
 package com.microsoft.nozzle.applicationinsights.message;
 
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @Data
-@NoArgsConstructor
-public class CustomMetric {
+public class CustomMetric extends BaseMessage {
+    private String name;
+
     private int count;
 
     private double min;
@@ -15,6 +15,11 @@ public class CustomMetric {
     private double sum;
 
     private double sumOfSquares;
+
+    public CustomMetric(String name, double value){
+        this.name = name;
+        trackValue(value);
+    }
 
     public double getAverage() {
         return (count == 0) ? 0 : (sum / count);

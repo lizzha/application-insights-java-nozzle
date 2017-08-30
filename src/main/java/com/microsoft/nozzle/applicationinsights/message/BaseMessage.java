@@ -17,5 +17,6 @@ public class BaseMessage {
 
     private String organizationName;
 
+    // source instance of LogMessage, instance index of ContainerMetric
     private String instanceId;
 }

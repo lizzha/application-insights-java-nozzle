@@ -4,9 +4,7 @@ import com.microsoft.nozzle.applicationinsights.config.NozzleProperties;
 import com.microsoft.nozzle.applicationinsights.config.TelemetryType;
 import com.microsoft.nozzle.applicationinsights.config.ApplicationConfig;
 import com.microsoft.nozzle.applicationinsights.cache.AppDataCache;
-import com.microsoft.nozzle.applicationinsights.message.BaseMessage;
-import com.microsoft.nozzle.applicationinsights.message.RtrMessage;
-import com.microsoft.nozzle.applicationinsights.message.TraceMessage;
+import com.microsoft.nozzle.applicationinsights.message.*;
 import lombok.extern.slf4j.Slf4j;
 import org.cloudfoundry.doppler.LogMessage;
 import org.cloudfoundry.doppler.ContainerMetric;
@@ -17,11 +15,9 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
-import java.text.SimpleDateFormat;
 
 /**
  * Parse events from the Cloud Foundry Firehose and send corresponding telemetries to Application Insights
@@ -46,7 +42,10 @@ public class FirehoseEventRouter {
         for (ApplicationConfig config : configs) {
             log.trace("Creating sender for app: {}", config.getApplicationId());
             ApplicationInsightsSender sender = new ApplicationInsightsSender(config.getInstrumentationKey());
-            appIdtoSenderMap.put(config.getApplicationId(), sender);
+            // Instrumentation key is not null
+            if (sender.isEnabled()) {
+                appIdtoSenderMap.put(config.getApplicationId(), sender);
+            }
         }
     }
 
@@ -57,10 +56,17 @@ public class FirehoseEventRouter {
      * @return
      */
     private ApplicationInsightsSender getSender(String appId) {
-        if (appId != null && appIdtoSenderMap.containsKey(appId)) {
-            return appIdtoSenderMap.get(appId);
-        }
-        return null;
+        return appIdtoSenderMap.get(appId);
+    }
+
+    /**
+     * Returns whether the telemetry type is ignored
+     *
+     * @param telemetryType
+     * @return
+     */
+    private boolean ignoreTelemetryType(TelemetryType telemetryType) {
+        return properties.getIgnoredTelemetries().contains(telemetryType);
     }
 
     /**
@@ -70,35 +76,33 @@ public class FirehoseEventRouter {
      */
     @Async
     void routeEnvelope(Envelope envelope) {
-        List<TelemetryType> telemetryTypes = properties.getCapturedTelemetries();
-
         if (envelope.getEventType() == EventType.LOG_MESSAGE) {
             LogMessage message = envelope.getLogMessage();
-
-            if (message != null) {
-                ApplicationInsightsSender sender = getSender(message.getApplicationId());
-                if (sender != null) {
-                    switch (message.getSourceType()) {
-                        case "RTR":
-                            if (telemetryTypes.contains(TelemetryType.HTTP_REQUEST)) {
-                                routeRtrMessage(message, sender);
-                            }
-                            break;
-                        case "API":
-                        case "STG":
-                        case "SSH":
-                            if (telemetryTypes.contains(TelemetryType.APP_EVENT)) {
-                                routeEvent(message, sender);
-                            }
-                        default:
-                            if (telemetryTypes.contains(TelemetryType.TRACE)) {
-                                routeTraceMessage(message, sender);
-                            }
-                    }
-                }
+            if (message == null) {
+                return;
             }
-        }
-        else if (envelope.getEventType() == EventType.CONTAINER_METRIC && telemetryTypes.contains(TelemetryType.METRIC)) {
+            ApplicationInsightsSender sender = getSender(message.getApplicationId());
+            if (sender == null) {
+                return;
+            }
+            switch (message.getSourceType()) {
+                case "RTR":
+                    if (!ignoreTelemetryType(TelemetryType.HTTP_REQUEST)) {
+                        routeRtrMessage(message, sender);
+                    }
+                    break;
+                case "API":
+                case "STG":
+                case "SSH":
+                    if (!ignoreTelemetryType(TelemetryType.APP_EVENT)) {
+                        routeEvent(message, sender);
+                    }
+                default:
+                    if (!ignoreTelemetryType(TelemetryType.TRACE)) {
+                        routeTraceMessage(message, sender);
+                    }
+            }
+        } else if (envelope.getEventType() == EventType.CONTAINER_METRIC && !ignoreTelemetryType(TelemetryType.METRIC)) {
             ContainerMetric message = envelope.getContainerMetric();
 
             if (message != null) {
@@ -119,30 +123,35 @@ public class FirehoseEventRouter {
     private void routeEvent(LogMessage message, ApplicationInsightsSender sender) {
         String msg = message.getMessage();
         if (msg != null) {
+            EventMessage event = new EventMessage();
             switch (message.getSourceType()) {
                 case "API":
                     if (msg.contains("({\"state\"=>\"STARTED\"})")) {
-                        sender.sendEvent("App Started");
+                        event.setName("App Started");
                     } else if (msg.contains("({\"state\"=>\"STOPPED\"})")) {
-                        sender.sendEvent("App Stopped");
+                        event.setName("App Stopped");
                     } else if (msg.contains("Deleted app")) {
-                        sender.sendEvent("App Deleted");
+                        event.setName("App Deleted");
                     } else if (msg.contains("Process has crashed")) {
-                        sender.sendEvent("App Crashed");
+                        event.setName("App Crashed");
                     }
                     break;
                 case "STG":
                     if (msg.contains("Staging complete")) {
-                        sender.sendEvent("Staging Complete");
+                        event.setName("Staging Complete");
                     }
                     break;
                 case "SSH":
                     if (msg.contains("Successful remote access")) {
-                        sender.sendEvent("SSH Success");
+                        event.setName("SSH Success");
                     } else if (msg.contains("Remote access ended")) {
-                        sender.sendEvent("SSH End");
+                        event.setName("SSH End");
                     }
                     break;
+            }
+            if (event.getName() != null) {
+                setCommonInfo(message.getApplicationId(), message.getSourceInstance(), event);
+                sender.sendEvent(event);
             }
         }
     }
@@ -156,27 +165,37 @@ public class FirehoseEventRouter {
     private void routeMetric(ContainerMetric message, ApplicationInsightsSender sender) {
         Double cpu = message.getCpuPercentage();
         if (cpu != null) {
-            sender.trackMetric("CPU Percentage (%)", message.getCpuPercentage());
+            CustomMetric metric = new CustomMetric("CPU Percentage (%)", message.getCpuPercentage());
+            setCommonInfo(message.getApplicationId(), message.getInstanceIndex().toString(), metric);
+            sender.trackMetric(metric);
         }
 
         Long disk = message.getDiskBytes();
         if (disk != null) {
-            sender.trackMetric("Disk Bytes (MB)", disk.doubleValue() / 1048576);
+            CustomMetric metric = new CustomMetric("Disk Bytes (MB)", disk.doubleValue() / 1048576);
+            setCommonInfo(message.getApplicationId(), message.getInstanceIndex().toString(), metric);
+            sender.trackMetric(metric);
         }
 
         Long memory = message.getMemoryBytes();
         if (memory != null) {
-            sender.trackMetric("Memory Bytes (MB)", memory.doubleValue() / 1048576);
+            CustomMetric metric = new CustomMetric("Memory Bytes (MB)", memory.doubleValue() / 1048576);
+            setCommonInfo(message.getApplicationId(), message.getInstanceIndex().toString(), metric);
+            sender.trackMetric(metric);
         }
 
         Long diskQuota = message.getDiskBytesQuota();
         if (diskQuota != null) {
-            sender.trackMetric("Disk Quota (MB)", diskQuota.doubleValue() / 1048576);
+            CustomMetric metric = new CustomMetric("Disk Quota (MB)", diskQuota.doubleValue() / 1048576);
+            setCommonInfo(message.getApplicationId(), message.getInstanceIndex().toString(), metric);
+            sender.trackMetric(metric);
         }
 
         Long memoryQuota = message.getMemoryBytesQuota();
         if (memoryQuota != null) {
-            sender.trackMetric("Memory Quota (MB)", memoryQuota.doubleValue() / 1048576);
+            CustomMetric metric = new CustomMetric("Memory Quota (MB)", memoryQuota.doubleValue() / 1048576);
+            setCommonInfo(message.getApplicationId(), message.getInstanceIndex().toString(), metric);
+            sender.trackMetric(metric);
         }
     }
 
@@ -185,9 +204,8 @@ public class FirehoseEventRouter {
      */
     @Scheduled(fixedRate = 60000)
     void sendMetric() {
-        if (properties.getCapturedTelemetries().contains(TelemetryType.METRIC)) {
-            for (String id : appIdtoSenderMap.keySet()) {
-                ApplicationInsightsSender sender = appIdtoSenderMap.get(id);
+        if (!ignoreTelemetryType(TelemetryType.METRIC)) {
+            for (ApplicationInsightsSender sender: appIdtoSenderMap.values()) {
                 sender.sendMetrics();
             }
         }
@@ -203,131 +221,26 @@ public class FirehoseEventRouter {
         String msg = message.getMessage();
 
         if (msg != null) {
-            RtrMessage rtr = parseRtrMessage(msg);
+            RtrMessage rtr = new RtrMessage();
+            rtr.parseRtrMessage(msg);
 
-            if (rtr != null) {
-                setCommonInfo(message, rtr);
-                sender.sendRequest(rtr);
-            }
+            setCommonInfo(message.getApplicationId(), message.getSourceInstance(), rtr);
+            sender.sendRequest(rtr);
         }
     }
 
     /**
      * Set the common information from LogMessage
      *
-     * @param message
+     * @param appId
+     * @param instanceId
      * @param base
      */
-    private void setCommonInfo(LogMessage message, BaseMessage base) {
-        appDataCache.getAppData(message.getApplicationId(), base);
-        base.setInstanceId(message.getSourceInstance());
+    private void setCommonInfo(String appId, String instanceId, BaseMessage base) {
+        appDataCache.getAppData(appId, base);
+        base.setInstanceId(instanceId);
     }
 
-    /**
-     * Parse RTR message from a string
-     *
-     * @param message
-     * @return
-     */
-    private RtrMessage parseRtrMessage(String message) {
-        String[] parts = message.split("\"");
-        if (parts.length < 20) {
-            log.error("Invalid RTR message: {}", message);
-            return null;
-        }
-
-        RtrMessage rtr = new RtrMessage();
-
-        try {
-            // host and timestamp
-            String[] strs = parts[0].trim().split(" ");
-            rtr.setHost(strs[0]);
-
-            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
-            Date timestamp = format.parse(strs[2].substring(1, strs[2].length() - 1));
-            rtr.setTimestamp(timestamp);
-
-            // method, path and protocol
-            strs = parts[1].trim().split(" ");
-            rtr.setMethod(strs[0]);
-            rtr.setPath(strs[1]);
-            rtr.setProtocol(strs[2]);
-
-            // status code, request bytes received, and body bytes sent
-            strs = parts[2].trim().split(" ");
-            rtr.setStatusCode(strs[0]);
-            int code = Integer.parseInt(strs[0]);
-            rtr.setSuccess(code < 400);
-            rtr.setRequestBytesReceived(strs[1]);
-            rtr.setBodyBytesSent(strs[2]);
-
-            // referer
-            rtr.setReferer(parts[3].trim());
-
-            // userAgent
-            rtr.setUserAgent(parts[5].trim());
-
-            //remoteAddr
-            rtr.setRemoteAddr(parts[7].trim());
-
-            // dest ip and port
-            rtr.setDestIpAndPort(parts[9].trim());
-
-            // x_forwarded_for
-            if (parts[10].contains("x_forwarded_for")) {
-                rtr.setXForwardedFor(parts[11].trim().split(",")[0]);
-            } else {
-                log.error("Error parsing x_forwarded_for: {}", parts[10]);
-            }
-
-            // x_forwarded_proto
-            switch (parts[13].trim()) {
-                case "http":
-                    rtr.setXForwardedProto("http");
-                    break;
-                case "https":
-                    rtr.setXForwardedProto("https");
-                    break;
-                default:
-                    log.error("Error parsing x_forwarded_proto: {}", parts[13]);
-            }
-
-            // vcap_request_id
-            if (parts[14].contains("vcap_request_id")) {
-                rtr.setVcapRequestId(parts[15].trim());
-            } else {
-                log.error("Error parsing vcap_request_id: {}", parts[14]);
-            }
-
-            // response time and app id
-            strs = parts[16].trim().split(" ");
-            if (strs[0].contains("response_time")) {
-                float responseTime = Float.parseFloat(strs[0].split(":")[1]);
-                // millisecond
-                rtr.setResponseTime((long) (responseTime * 1000));
-            } else {
-                log.error("Error parsing response time: {}", parts[16]);
-            }
-
-            if (strs[1].contains("app_id")) {
-                rtr.setAppId(parts[17].trim());
-            } else {
-                log.error("Error parsing app id: {}", parts[16]);
-            }
-
-            // app index
-            if (parts[18].contains("app_index")) {
-                rtr.setAppIndex(parts[19].trim());
-            } else {
-                log.error("Error parsing app index: {}", parts[18]);
-            }
-
-        } catch (Exception e) {
-            log.error("Error parsing RTR message: {}", e.getMessage());
-        }
-
-        return rtr;
-    }
 
     /**
      * Generate Trace telemetry, and send to Application Insights
@@ -341,13 +254,12 @@ public class FirehoseEventRouter {
         if (msg != null) {
             TraceMessage trace = new TraceMessage();
 
-            setCommonInfo(message, trace);
+            setCommonInfo(message.getApplicationId(), message.getSourceInstance(), trace);
 
             trace.setMessage(msg);
             trace.setMessageType(message.getMessageType());
 
             sender.sendTrace(trace);
-
         }
     }
 }
