@@ -122,37 +122,39 @@ public class FirehoseEventRouter {
      */
     private void routeEvent(LogMessage message, ApplicationInsightsSender sender) {
         String msg = message.getMessage();
-        if (msg != null) {
-            EventMessage event = new EventMessage();
-            switch (message.getSourceType()) {
-                case "API":
-                    if (msg.contains("({\"state\"=>\"STARTED\"})")) {
-                        event.setName("App Started");
-                    } else if (msg.contains("({\"state\"=>\"STOPPED\"})")) {
-                        event.setName("App Stopped");
-                    } else if (msg.contains("Deleted app")) {
-                        event.setName("App Deleted");
-                    } else if (msg.contains("Process has crashed")) {
-                        event.setName("App Crashed");
-                    }
-                    break;
-                case "STG":
-                    if (msg.contains("Staging complete")) {
-                        event.setName("Staging Complete");
-                    }
-                    break;
-                case "SSH":
-                    if (msg.contains("Successful remote access")) {
-                        event.setName("SSH Success");
-                    } else if (msg.contains("Remote access ended")) {
-                        event.setName("SSH End");
-                    }
-                    break;
-            }
-            if (event.getName() != null) {
-                setCommonInfo(message.getApplicationId(), message.getSourceInstance(), event);
-                sender.sendEvent(event);
-            }
+        if (msg == null) {
+            return;
+        }
+        String eventName = null;
+        switch (message.getSourceType()) {
+            case "API":
+                if (msg.contains("({\"state\"=>\"STARTED\"})")) {
+                    eventName = "App Started";
+                } else if (msg.contains("({\"state\"=>\"STOPPED\"})")) {
+                    eventName = "App Stopped";
+                } else if (msg.contains("Deleted app")) {
+                    eventName = "App Deleted";
+                } else if (msg.contains("Process has crashed")) {
+                    eventName = "App Crashed";
+                }
+                break;
+            case "STG":
+                if (msg.contains("Staging complete")) {
+                    eventName = "Staging Complete";
+                }
+                break;
+            case "SSH":
+                if (msg.contains("Successful remote access")) {
+                    eventName = "SSH Success";
+                } else if (msg.contains("Remote access ended")) {
+                    eventName = "SSH End";
+                }
+                break;
+        }
+        if (eventName != null) {
+            EventMessage event = new EventMessage(eventName);
+            setCommonInfo(message.getApplicationId(), message.getSourceInstance(), event);
+            sender.sendEvent(event);
         }
     }
 
