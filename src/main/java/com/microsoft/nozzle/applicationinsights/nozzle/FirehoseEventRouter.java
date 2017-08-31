@@ -167,38 +167,34 @@ public class FirehoseEventRouter {
     private void routeMetric(ContainerMetric message, ApplicationInsightsSender sender) {
         Double cpu = message.getCpuPercentage();
         if (cpu != null) {
-            CustomMetric metric = new CustomMetric("CPU Percentage (%)");
-            setCommonInfo(message.getApplicationId(), message.getInstanceIndex().toString(), metric);
-            sender.trackMetric(metric, cpu.doubleValue());
+            trackMetric("CPU Percentage (%)", message.getApplicationId(), message.getInstanceIndex().toString(), sender, cpu.doubleValue());
         }
 
         Long disk = message.getDiskBytes();
         if (disk != null) {
-            CustomMetric metric = new CustomMetric("Disk Bytes (MB)");
-            setCommonInfo(message.getApplicationId(), message.getInstanceIndex().toString(), metric);
-            sender.trackMetric(metric, disk.doubleValue() / 1048576);
+            trackMetric("Disk Bytes (MB)", message.getApplicationId(), message.getInstanceIndex().toString(), sender, disk.doubleValue() / 1048576);
         }
 
         Long memory = message.getMemoryBytes();
         if (memory != null) {
-            CustomMetric metric = new CustomMetric("Memory Bytes (MB)");
-            setCommonInfo(message.getApplicationId(), message.getInstanceIndex().toString(), metric);
-            sender.trackMetric(metric, memory.doubleValue() / 1048576);
+            trackMetric("Memory Bytes (MB)", message.getApplicationId(), message.getInstanceIndex().toString(), sender, memory.doubleValue() / 1048576);
         }
 
         Long diskQuota = message.getDiskBytesQuota();
         if (diskQuota != null) {
-            CustomMetric metric = new CustomMetric("Disk Quota (MB)");
-            setCommonInfo(message.getApplicationId(), message.getInstanceIndex().toString(), metric);
-            sender.trackMetric(metric, diskQuota.doubleValue() / 1048576);
+            trackMetric("Disk Quota (MB)", message.getApplicationId(), message.getInstanceIndex().toString(), sender, diskQuota.doubleValue() / 1048576);
         }
 
         Long memoryQuota = message.getMemoryBytesQuota();
         if (memoryQuota != null) {
-            CustomMetric metric = new CustomMetric("Memory Quota (MB)");
-            setCommonInfo(message.getApplicationId(), message.getInstanceIndex().toString(), metric);
-            sender.trackMetric(metric, memoryQuota.doubleValue() / 1048576);
+            trackMetric("Memory Quota (MB)", message.getApplicationId(), message.getInstanceIndex().toString(), sender, memoryQuota.doubleValue() / 1048576);
         }
+    }
+
+    private void trackMetric(String name, String appId, String instanceIndex, ApplicationInsightsSender sender, double value) {
+        CustomMetric metric = new CustomMetric(name);
+        setCommonInfo(appId, instanceIndex, metric);
+        sender.trackMetric(metric, value);
     }
 
     /**
