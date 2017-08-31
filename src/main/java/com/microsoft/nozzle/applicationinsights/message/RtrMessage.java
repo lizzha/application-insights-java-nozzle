@@ -59,10 +59,11 @@ public class RtrMessage extends BaseMessage {
         return method + " " + path;
     }
 
-    public void parseRtrMessage(String message) {
+    public boolean parseRtrMessage(String message) {
         String[] parts = message.split("\"");
         if (parts.length < 20) {
             log.error("Invalid RTR message: {}", message);
+            return false;
         }
 
         try {
@@ -105,6 +106,7 @@ public class RtrMessage extends BaseMessage {
                 this.xForwardedFor = parts[11].trim().split(",")[0];
             } else {
                 log.error("Error parsing x_forwarded_for: {}", parts[10]);
+                return false;
             }
 
             // x_forwarded_proto
@@ -117,6 +119,7 @@ public class RtrMessage extends BaseMessage {
                     break;
                 default:
                     log.error("Error parsing x_forwarded_proto: {}", parts[13]);
+                    return false;
             }
 
             // vcap_request_id
@@ -150,6 +153,9 @@ public class RtrMessage extends BaseMessage {
             }
         } catch (Exception e) {
             log.error("Error parsing RTR message: {}", e.getMessage());
+            return false;
         }
+
+        return true;
     }
 }

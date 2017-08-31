@@ -220,10 +220,11 @@ public class FirehoseEventRouter {
 
         if (msg != null) {
             RtrMessage rtr = new RtrMessage();
-            rtr.parseRtrMessage(msg);
 
-            setCommonInfo(message.getApplicationId(), message.getSourceInstance(), rtr);
-            sender.sendRequest(rtr);
+            if (rtr.parseRtrMessage(msg)) {
+                setCommonInfo(message.getApplicationId(), message.getSourceInstance(), rtr);
+                sender.sendRequest(rtr);
+            }
         }
     }
 

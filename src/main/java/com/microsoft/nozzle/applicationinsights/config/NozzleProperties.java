@@ -52,7 +52,7 @@ public class NozzleProperties {
     /**
      * The telemetry types NOT to send to Application Insights. Comma separated string. Valid types are HttpRequest, Metric, AppEvent, AppLog
      */
-    private String telemetryFilter;
+    private String telemetryIgnoreList;
 
     /**
      * String of a list of APPLICATION_ID and INSTRUMENTATION_KEY, it's recommended that each application use a separate Application Insights resource
@@ -69,11 +69,11 @@ public class NozzleProperties {
     public void setIgnoredTelemetries() {
         ignoredTelemetries.clear();
 
-        if (telemetryFilter == null || telemetryFilter.isEmpty()) {
+        if (telemetryIgnoreList == null || telemetryIgnoreList.isEmpty()) {
             return;
         }
 
-        String lower = telemetryFilter.toLowerCase();
+        String lower = telemetryIgnoreList.toLowerCase();
 
         if (lower.contains("httprequest")) {
             ignoredTelemetries.add(TelemetryType.HTTP_REQUEST);

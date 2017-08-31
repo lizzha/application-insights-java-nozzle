@@ -17,7 +17,7 @@ This is the Cloud Foundry Firehose nozzle for [Application Insights](https://doc
 * [Install Cloud Foundry CLI](https://github.com/cloudfoundry/cli#downloads)
 * [Install Cloud Foundry UAA Command Line Client](https://github.com/cloudfoundry/cf-uaac/blob/master/README.md)
 
-### 3. Create one or more Application Insights resources in Azure
+### 3. Create one or more Application Insights resources on Azure
 For different applications, a separate Application Insights resource should be used for each app.
 * [Create Application Insights resource](https://docs.microsoft.com/en-us/azure/application-insights/app-insights-create-new-resource)
 * [Separate resources of Application Insights](https://docs.microsoft.com/en-us/azure/application-insights/app-insights-separate-resources)
@@ -66,7 +66,7 @@ CLIENT_SECRET          : The secret of the UAA client
 API_ADDR               : The api URL of the CF environment, format: api.$CF_SYSTEM_DOMAIN
 SKIP_SSL_VALIDATION    : If true, allows insecure connections to the UAA and the Trafficcontroller
 LOG_LEVEL              : Logging level of the nozzle, valid levels: TRACE, DEBUG, INFO, ERROR
-TELEMETRY_FILTER       : Telemetry types to ignore. Comma separated list, valid types: HttpRequest, Metric, AppEvent, Trace
+TELEMETRY_IGNORE_LIST  : Telemetry types to ignore. Comma separated list, valid types: HttpRequest, Metric, AppEvent, Trace
 APPLICATION_CONFIG     : A list of APPLICATION_ID and INSTRUMENTATION_KEY
  - APPLICATION_ID      : The ID of the application to collect telemetries
  - INSTRUMENTATION_KEY : The instrumentation key of the Application Insights resource.
