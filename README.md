@@ -10,7 +10,7 @@ This is the Cloud Foundry Firehose nozzle for [Application Insights](https://doc
 ### 1. Deploy a CF or PCF environment on Azure
 
 * [Deploy Cloud Foundry on Azure](http://docs.cloudfoundry.org/deploying/azure/index.html)
-* [Deploy Pivotal Cloud Foundry on Azure](https://docs.pivotal.io/pivotalcf/1-9/customizing/azure.html)
+* [Deploy Pivotal Cloud Foundry on Azure](https://docs.pivotal.io/pivotalcf/customizing/azure.html)
 
 ### 2. Install CLIs on your dev box
 

@@ -59,6 +59,17 @@ public class RtrMessage extends BaseMessage {
         return method + " " + path;
     }
 
+    /**
+     * Parse the RTR message
+     * Example of RTR message:
+     * www.example.com - [2017-07-05T03:00:58.329+0000] "GET / HTTP/1.1" 304 0 0 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+     * (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36 Edge/15.15063" "10.0.0.24:40718" "10.0.0.23:60958" x_forwarded_for:"167.220.255.47, 10.0.0.24"
+     * x_forwarded_proto:"http" vcap_request_id:"061a9e6a-9acb-4284-43be-7e80199ef244" response_time:0.002771 app_id:"e0e72fdd-5a40-4e54-a14b-703233604d8d"
+     * app_index:"0" x_b3_traceid:"9c1a701d7b8bb275" x_b3_spanid:"9c1a701d7b8bb275" x_b3_parentspanid:"-"
+     *
+     * @param message
+     * @return
+     */
     public boolean parseRtrMessage(String message) {
         String[] parts = message.split("\"");
         if (parts.length < 20) {
